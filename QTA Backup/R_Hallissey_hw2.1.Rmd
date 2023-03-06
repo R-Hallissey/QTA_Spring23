@@ -24,20 +24,7 @@ We begin by analyzing a sample from the Zhang, Zhao & LeCun (2015) dataset of Ye
 First, bring in the reviews dataset from the `data` directory.  
 
 ```{r}
-setwd(getwd())
-yelp_data <- read.csv("./data/yelp_data_small.csv", 
-                 stringsAsFactors=FALSE,
-                 encoding = "utf-8")
-
 #Packages
-## Load packages
-install.packages("caret",type="binary")
-library("caret")
-install.packages("vctrs", version="0.5.1", lib = "C:/R/win-library/4.2")
-library(vctrs)
-install.packages("naivebayes")
-library(naivebayes)
-
 pkgTest <- function(pkg){
   new.pkg <- pkg[!(pkg %in% installed.packages()[,  "Package"])]
   if (length(new.pkg)) 
@@ -51,9 +38,11 @@ lapply(c("tidyverse",
          "lubridate",
          "quanteda.textmodels", 
          "quanteda.textstats", 
-         "caret", # For train/test split
-         "MLmetrics", # For ML
-         "doParallel"), # For parallel processing
+         "caret", 
+         "MLmetrics", 
+         "doParallel",
+         "naivebayes",
+         "vctrs"),
        pkgTest)
 ```
 
@@ -62,6 +51,12 @@ lapply(c("tidyverse",
 
 ```{r}
 ### Problem 1 ###
+# Data 
+setwd(getwd())
+yelp_data <- read.csv("C:/Users/User/OneDrive - TCDUD.onmicrosoft.com/Documents/ASDS/QTA/yelp_data_small.csv", 
+                 stringsAsFactors=FALSE,
+                 encoding = "utf-8")
+
 # 1. Creating Corpus
 yelp_corpus <- corpus(yelp_data,
                       meta = list(), # including meta data for names
@@ -173,63 +168,49 @@ train_control <- trainControl(
     + Discuss the most predictive features of the dataset. (*Hint: use `kwic` to provide a qualitative context)
 
 ```{r}
-# Default paramter
-modelLookup(model = "naive_bayes")
-
-#
+# Tuning Grid
 tuneGrid = expand.grid(laplace = c(0,0.5,1.0),
                        usekernel = c(TRUE, FALSE),
                        adjust=c(0.75, 1, 1.25, 1.5))
 
-
-
-
-cl <- makePSOCKcluster(2) # create number of copies of R to run in parallel and communicate over sockets
-# Note that the number of clusters depends on how many cores your machine has.  You may need to reduce it to 3 for example.
-registerDoParallel(cl) # register parallel backed with foreach package
-
 # train model
-nb_train <- train(sentiment_labels ~ ., 
-                  data = Train,  
-                  method = "naive_bayes", 
-                  metric = "F1",
-                  trControl = train_control,
-                  tuneGrid = expand.grid(laplace = c(0,1),
-                                         usekernel = c(TRUE, FALSE),
-                                         adjust = c(0.75, 1, 1.25, 1.5)),
-                  allowParallel= TRUE
-)
+#nb_train <- train(sentiment_labels ~ ., 
+#                  data = Train,  
+#                  method = "naive_bayes", 
+#                  metric = "F1",
+#                  trControl = train_control,
+#                  tuneGrid = expand.grid(laplace = c(0,1),
+#                                         usekernel = c(TRUE, FALSE),
+#                                         adjust = c(0.75, 1, 1.25, 1.5)),
+#                  allowParallel= TRUE
+#)
 
-# 
-stopCluster(cl) # stop parallel process once job is done
-print(nb_train)
+#Training Model Upload
+nb_train <- readRDS("C:/Users/User/OneDrive - TCDUD.onmicrosoft.com/Documents/ASDS/QTA/nb_train")
 
 # Evaluate performance 
-pred <- predict(nb_train, newdata = Test) # generate prediction on Test set using training set model
+pred <- predict(nb_train, newdata = Test)
 head(pred)
 
 
 # confusion matrix
 confusionMatrix(reference = as.factor(Test$sentiment_labels), data = pred, mode='everything', positive='neg')
 
-#             i) Finalise the model
-nb_final <- train(sentiment_labels ~ ., 
-                  data = ldata,  
-                  method = "naive_bayes", 
-                  trControl = trainControl(method = "none"),
-                  tuneGrid = data.frame(nb_train$bestTune))
+# Final model code
+#nb_final <- train(sentiment_labels ~ ., 
+#                  data = ldata,  
+#                  method = "naive_bayes", 
+#                  trControl = trainControl(method = "none"),
+#                  tuneGrid = data.frame(nb_train$bestTune))
 
-#             j) Save the model!
-saveRDS(nb_final, "QTA/nb_final")
+# Final Model Upload
+nb_final <- readRDS("C:/Users/User/OneDrive - TCDUD.onmicrosoft.com/Documents/ASDS/QTA/nb_final")
 
-#             k) If your machine is running slow... read in the model 
-#nb_final <- readRDS("data/nb_final")
-
-#             l) Predict from validation set
+# Predict from validation set
 pred2 <- predict(nb_final, newdata = vdata)
 head(pred2) # first few predictions
 
-#             m) Evaluate confusion matrix (because we actually have labels...)
+# Evaluate confusion matrix
 confusionMatrix(reference = as.factor(vdata$sentiment_labels), data = pred2, mode='everything')
 
 #Analysis
@@ -282,12 +263,10 @@ tuneGrid <- expand.grid(C = c(0.5, 1, 1.5))
       #             allowParallel= TRUE
 #)
 
-svm_train <- readRDS("C:\Users\User\OneDrive - TCDUD.onmicrosoft.com\Documents\GitHub\QTA_Spring23\QTA Backup/svm_train") 
+svm_train <- readRDS("C:/Users/User/OneDrive - TCDUD.onmicrosoft.com/Documents/GitHub/QTA_Spring23/QTA Backup/svm_train") 
 
-#             g) Stop the cluster
-stopCluster(cl)
 
-#             h) Evaluate performance
+# Evaluate performance
 print(svm_train)
 pred_svm <- predict(svm_train, newdata = Test) # Predict on test sample using best model
 confusionMatrix(reference = as.factor(Test$sentiment_labels), data = pred_svm, mode='everything')
@@ -301,11 +280,10 @@ svm_final <- train(sentiment_labels ~ .,
 print(svm_final)
 svm_final$coefnames
 
-#             j) Save the model!
-saveRDS(svm_final, "QTA/svm_final")
 
-#             k) In case your computer is running slow... read in the model
-#svm_final <- readRDS("data/svm_final")
+# read in the model
+svm_final <- readRDS("C:/Users/User/OneDrive - TCDUD.onmicrosoft.com/Documents/ASDS/QTA")
+
 
 #             l) Predict from validation set
 svm_pred2 <- predict(svm_final, newdata = vdata)
@@ -354,7 +332,7 @@ First, bring in a sample of Breitbart articles from 2016 (n=5000):
 
 ```{r}
 setwd(getwd())
-dat <- read.csv("./data/breitbart_2016_sample.csv", 
+dat <- read.csv("C:/Users/User/OneDrive - TCDUD.onmicrosoft.com/Documents/ASDS/QTA/breitbart_2016_sample.csv", 
                  stringsAsFactors=FALSE,
                  encoding = "utf-8")
 ```
@@ -362,6 +340,7 @@ dat <- read.csv("./data/breitbart_2016_sample.csv",
 1. Process the text and generate a document-feature matrix.  Be sure to remove unhelpful characters and tokens from the DFM and to also retain the original text for model validation.  Remove tokens that occur in less than 20 documents.  Justify your feature selection decisions.
 
 ```{r}
+# Pre-Process data
 dat$content <- str_replace(dat$content, "\u2022.+$", "")
 
 # Creating corpus
@@ -372,7 +351,9 @@ corp <- corpus(dat,
 # Processing
 prepped_toks <- prep_toks(corp) # basic token cleaning
 collocations <- get_coll(prepped_toks) # get collocations
-toks <- tokens_compound(prepped_toks, pattern = collocations[collocations$z > 10,]) # replace collocations
+toks <- tokens_compound(prepped_toks, pattern = collocations[collocations$z > 10,]) 
+
+# replace collocations
 toks <- tokens_remove(tokens(toks), "")  # let's also remove the whitespace placeholders
 toks <- tokens_remove(toks, c("said","say"))
 
@@ -402,30 +383,30 @@ docvars(dfm, "date") <- lubridate::dmy(dfm@docvars$date)
 
 ```{r}
 ###############################################################################
-#i struggled to get prevalence code working. I reconfigured date
+# I struggled to get prevalence code working. I reconfigured date
 # with lubridate above but did not have time to run the alogrithim again
 ############################################################################
 
 stmdfm <- convert(dfm, to = "stm")
 
 # Set k
-K <- 35
+#K <- 35
 
 
 # STM algorithm
-modelFit <- stm(documents = stmdfm$documents,
-                vocab = stmdfm$vocab,
-                K = K,
-                #prevalence = ~ s(month(date)),
-                #prevalence = ~ s(as.numeric(date_month)), 
-                data = stmdfm$meta,
-                max.em.its = 500,
-                init.type = "Spectral",
-                seed = 1234,
-                verbose = TRUE)
+#modelFit <- stm(documents = stmdfm$documents,
+#                vocab = stmdfm$vocab,
+#                K = K,
+#                #prevalence = ~ s(month(date)),
+#                #prevalence = ~ s(as.numeric(date_month)), 
+#                data = stmdfm$meta,
+#                max.em.its = 500,
+#                init.type = "Spectral",
+#                seed = 1234,
+ #               verbose = TRUE)
 
-# Save your model!
-model_fit <- readRDS("C:\Users\User\OneDrive - TCDUD.onmicrosoft.com\Documents\GitHub\QTA_Spring23\QTA Backup/modelFit")
+# Model upload
+model_fit <- readRDS("C:/Users/User/OneDrive - TCDUD.onmicrosoft.com/Documents/ASDS/QTA/modelFit")
 
 ```
 
@@ -443,7 +424,7 @@ plot.STM(modelFit,
          text.cex = 0.7,
          main = "Topic prevalence and top terms")
 
-# Use wordcloud to visualise top terms per topic
+# Wordcloud to visualise terms
 cloud(modelFit,
       topic = 1,
       scale = c(2.5, 0.3),
@@ -456,125 +437,6 @@ cloud(modelFit,
 ######################################
 #Couldn't process without correct date
 #####################################
-
-## 4. Topic validation: predictive validity using time series data
-#     a) Convert metadata to correct format
-#stmdfm$meta$num_month <- as.numeric(stmdfm$meta$date_month)
-stmdfm$meta$num_month <- month(stmdfm$meta$date)
-
-#     b) Aggregate topic probability by month
-agg_theta <- setNames(aggregate(modelFit$theta,
-                                by = list(month = stmdfm$meta$num_month),
-                                FUN = mean),
-                      c("month", paste("Topic",1:K)))
-agg_theta <- pivot_longer(agg_theta, cols = starts_with("T"))
-
-#     c) Plot aggregated theta over time
-ggplot(data = agg_theta,
-       aes(x = month, y = value, group = name)) +
-  geom_smooth(aes(colour = name), se = FALSE) +
-  labs(title = "Topic prevalence",
-       x = "Month",
-       y = "Average monthly topic probability") + 
-  theme_minimal()
-
-## 5. Semantic validation (topic correlations)
-topic_correlations <- topicCorr(modelFit)
-plot.topicCorr(topic_correlations,
-               vlabels = seq(1:ncol(modelFit$theta)), # we could change this to a vector of meaningful labels
-               vertex.color = "white",
-               main = "Topic correlations")
-
-## 6. Topic quality (semantic coherence and exclusivity)
-topicQuality(model = modelFit,
-             documents = stmdfm$documents,
-             xlab = "Semantic Coherence",
-             ylab = "Exclusivity",
-             labels = 1:ncol(modelFit$theta),
-             M = 15)
-
-# An alternative approach, using underlying functions
-SemEx <- as.data.frame(cbind(c(1:ncol(modelFit$theta)), 
-                             exclusivity(modelFit),
-                             semanticCoherence(model = modelFit,
-                                               documents = stmdfm$documents,
-                                               M = 15)))
-
-colnames(SemEx) <- c("k", "ex", "coh")
-
-SemExPlot <- ggplot(SemEx, aes(coh, ex)) +
-  geom_text(aes(label=k)) +
-  labs(x = "Semantic Coherence",
-       y = "Exclusivity",
-       title = "Topic Semantic Coherence vs. Exclusivity") +
-  geom_rug() +
-  theme_minimal() +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_rect(colour = "gray", linewidth=1))
-SemExPlot
-
-# Inspect outliers
-labelTopics(modelFit,
-            topics = c(6,3))
-
-## 7. Extended visualisations
-#     a) Using LDAvis
-toLDAvis(mod = modelFit,
-         docs = stmdfm$documents,
-         open.browser = interactive(),
-         reorder.topics = TRUE)
-
-#     b) Using stmBrowser
-#        Warning: this will (silently) change your working directory!
-stmBrowser(mod = modelFit,
-           data = stmdfm$meta,
-           covariates = c("section_name", "num_month"),
-           text = "standfirst",
-           n = 1000)
-
-## 8. Estimating covariate effects
-#     a) Calculate
-estprop <- estimateEffect(formula = c(1:ncol(modelFit$theta)) ~ section_name + s(num_month),
-                          modelFit,
-                          metadata = stmdfm$meta,
-                          uncertainty = "Global",
-                          nsims = 25)
-
-summary(estprop)
-
-#     b) Plot topic probability differences
-custom_labels <- seq(1:K)
-plot.estimateEffect(x = estprop,
-                    #model = modelFit,
-                    method = "difference",
-                    covariate = "section_name",
-                    cov.value1 = "World",
-                    cov.value2 = "Opinion",
-                    topics = estprop$topics,
-                    #xlim = c(-.05, .05),
-                    labeltype = "custom",
-                    custom.labels = custom_labels)
-
-#     c) Plot topic probability over time (similar to above plot in 4.)
-plot.estimateEffect(x = estprop,
-                    #model = modelFit,
-                    method = "continuous",
-                    covariate = "num_month",
-                    topics = estprop$topics,
-                    #xlim = c(-.05, .05),
-                    labeltype = "custom",
-                    custom.labels = custom_labels,
-                    printlegend = F) # Toggle this to see January
-
-## 9. Using data to determine k
-?searchK
-kResult <- searchK(documents = stmdfm$documents,
-                   vocab = stmdfm$vocab,
-                   K=c(4:10),
-                   init.type = "Spectral",
-                   data = stmdfm$meta,
-                   prevalence = ~ section_name + s(month(date)))
 ```
 
 5.  What insights can be gleaned about right-wing media coverage of the 2016 US election?  What election-related topics were derived from the model?  What interesting temporal patterns exist?  Why might the prevalence of certain important topics vary over 2016?  Provide evidence in support of your answers.
