@@ -1,11 +1,35 @@
-#############################
-# Quantitative Text Analysis 
-# Homework 2 
-# Ruairí Hallissey             
-# 1-3-2023 / 11 Ventôse CCXXXI 
-###############################
+---
+title: 'POP77022: Programming Exercise 2'
+author: "Ruairí Hallissey"
+date: "3-3-2023 / 13 Ventôse CCXXXI"
+output: html_document
 
-## Load packages
+Note: Apologies Martyn. I had many many issues and was running alorithms for over tweenty four hours in one case. I didn't atticpate how long it would take so this ultimately became extremely rushed and is only partcially complete.
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+The second homework assignment covers concepts and methods from Weeks 3 and 4 (Supervised and unsupervised text classification).  
+
+Please provide your answers as code and text in the RMarkdown file provided. When completed, first knit the file as an HTML file and then save the resulting HTML document in PDF format.  Upload the PDF to Turnitin.
+
+## Supervised text classification of Yelp reviews (50 points)
+
+We begin by analyzing a sample from the Zhang, Zhao & LeCun (2015) dataset of Yelp reviews which have been coded for sentiment polarity.  The authors of the dataset have created a `sentiment` variable where a value of 1 indicates a "negative" review (1 or 2 stars), and a 2 means a "positive" review (3 or 4 stars).
+
+First, bring in the reviews dataset from the `data` directory.  
+
+```{r}
+setwd(getwd())
+yelp_data <- read.csv("./data/yelp_data_small.csv", 
+                 stringsAsFactors=FALSE,
+                 encoding = "utf-8")
+
+#Packages
 ## Load packages
 install.packages("caret",type="binary")
 library("caret")
@@ -13,8 +37,6 @@ install.packages("vctrs", version="0.5.1", lib = "C:/R/win-library/4.2")
 library(vctrs)
 install.packages("naivebayes")
 library(naivebayes)
-install.packages("wordcloud")
-library(wordcloud)
 
 pkgTest <- function(pkg){
   new.pkg <- pkg[!(pkg %in% installed.packages()[,  "Package"])]
@@ -33,8 +55,12 @@ lapply(c("tidyverse",
          "MLmetrics", # For ML
          "doParallel"), # For parallel processing
        pkgTest)
-# Data from https://www.dropbox.com/sh/o9bhqm65tf1bnuv/AADjLpLGfjqA4WLmoANtVRK7a/_Homeworks/hw2/data?dl=0&subfolder_nav_tracking=1 
+```
 
+1.  Create a `quanteda` corpus object from this matrix and inspect its attributes.  
+    + What is the overall probability of the "positive" class in the corpus?  Are the classes balanced? (Hint: Use the `table()` function)
+
+```{r}
 ### Problem 1 ###
 # 1. Creating Corpus
 yelp_corpus <- corpus(yelp_data,
@@ -45,7 +71,11 @@ summary(yelp_corpus)
 table(yelp_corpus$sentiment)
 4912 / length(yelp_corpus$sentiment)
 print("Probaility of a positive review is 0.49")
+```
 
+2.  Create a document-feature matrix using this corpus.  Process the text so as to increase predictive power of the features. Justify each of your processing decisions in the context of the supervised classification task.
+
+```{r}
 # 2. Processing Tokens and Creating Document Feature Matrix
 
 # Fuctions
@@ -102,7 +132,11 @@ yelp_df <- convert(yelp_dfm, to = "data.frame", docvars = NULL)
 yelp_df <- yelp_df[, -1] # drop document id variable (first variable)
 sentiment_labels <- yelp_dfm@docvars$sentiment # get sentiment labels
 yelp_df <- as.data.frame(cbind(sentiment_labels, yelp_df)) # labelled data frame
+```
 
+3.  Now that you have your document-feature matrix, use the `caret` library to create a training set and testing set following an 80/20 split.
+
+```{r}
 ## ML Preparation
 # Create a 5% validation split
 set.seed(2023) # set seed for replicability
@@ -130,7 +164,15 @@ train_control <- trainControl(
   selectionFunction = "best", # select the model with the best performance metric
   verboseIter = TRUE
 )
+```
 
+4.  Using these datasets, train a naive Bayes classifier with the `caret` library to predict review sentiment.  Explain each step you take in the learning pipeline. Be sure to:
+    + Evaluate the performance of the model in terms of classification accuracy of predictions in the testing set. Include a discussion of precision, recall and F1.
+    + Explain in detail what steps were taken to help avoid overfitting.
+    + Describe your parameter tuning.
+    + Discuss the most predictive features of the dataset. (*Hint: use `kwic` to provide a qualitative context)
+
+```{r}
 # Default paramter
 modelLookup(model = "naive_bayes")
 
@@ -220,9 +262,11 @@ print("Place often appears as people compliant the resteraunt")
 
 kwic(toks, phrase("well"))
 print("Well often appears as people compliant the resteraunt")
+```
 
+5. Provide a similar analysis using a Support Vector Machine.  However, irrespective of your settings for Question 4, for this excercise use a 5-fold cross-validation when training the model.  Be sure to explain all steps involved as well as an evaluation of model performance.  Which model is better, NB or SVM?  Explain in detail.
 
-## Support Vector Machine
+```{r}
 # You need to a) Examine parameters 
 modelLookup(model = "svmLinear")
 
@@ -309,12 +353,24 @@ print("Place often appears as people compliant the resteraunt")
 
 kwic(toks, phrase("well"))
 print("Well often appears as people compliant the resteraunt")
+```
 
-#################################################
-# Problem 2
-###############################################
-#Data
+## Topic Modeling Breitbart News (50 points)
 
+In this section, we will analyze the thematic structure of a corpus of news articles from Breitbart News, a right-wing American news outlet. Employ a Structural Topic Model from the `stm` library to investigate the themes found within this corpus.
+
+First, bring in a sample of Breitbart articles from 2016 (n=5000):
+
+```{r}
+setwd(getwd())
+dat <- read.csv("./data/breitbart_2016_sample.csv", 
+                 stringsAsFactors=FALSE,
+                 encoding = "utf-8")
+```
+
+1. Process the text and generate a document-feature matrix.  Be sure to remove unhelpful characters and tokens from the DFM and to also retain the original text for model validation.  Remove tokens that occur in less than 20 documents.  Justify your feature selection decisions.
+
+```{r}
 dat$content <- str_replace(dat$content, "\u2022.+$", "")
 
 # Creating corpus
@@ -346,19 +402,26 @@ toks <- tokens(toks,
 dfm <- dfm(toks)
 dfm <- dfm_trim(dfm, min_docfreq = 20)
 
+
 # date fix
 docvars(dfm, "date") <- lubridate::dmy(dfm@docvars$date)
+```
 
-#
+2.  Convert the DFM into STM format and fit an STM model with `k=35` topics.  
+
+```{r}
+###############################################################################
+#i struggled to get prevalence code working. I reconfigured date
+# with lubridate above but did not have time to run the alogrithim again
+############################################################################
+
 stmdfm <- convert(dfm, to = "stm")
 
 # Set k
 K <- 35
 
-# Run STM algorithm
-#i struggled to get prevalence code working. I reconfigured date
-# with lubridate above but did not have time to run the alogrithim again
 
+# STM algorithm
 modelFit <- stm(documents = stmdfm$documents,
                 vocab = stmdfm$vocab,
                 K = K,
@@ -370,13 +433,14 @@ modelFit <- stm(documents = stmdfm$documents,
                 seed = 1234,
                 verbose = TRUE)
 
-
 # Save your model!
 saveRDS(modelFit, "QTA/modelFit")
 
-# Load model (in case your computer is running slow...)
-modelFit <- readRDS("data/modelFit")
+```
 
+3.  Interpret the topics generated by the STM model.  Discuss the prevalence and top terms of each topic.  Provide a list of the labels you have associated with each estimated topic.  For each topic, justify your labelling decision. (Hint: You will want to cite excerpts from typical tweets of a given topic.  Also, use the date variable to inform estimates of topic prevalence.).  
+
+```{r}
 ## 3. Interpret Topic model 
 # Inspect most probable terms in each topic
 labelTopics(modelFit)
@@ -393,16 +457,14 @@ cloud(modelFit,
       topic = 1,
       scale = c(2.5, 0.3),
       max.words = 50)
+```
 
-# Reading documents with high probability topics: the findThoughts() function
-findThoughts(modelFit,
-             texts = dfm@docvars$standfirst, # If you include the original corpus text, we could refer to this here
-             topics = 1,
-             n = 10)
+4.  Topic model validation.  Demonstrate and interpret the semantic and predictive validity of the model.  Also discuss the quality of topics in terms of semantic coherence and top exclusivity.  Discuss how you would show construct validity.
 
+```{r}
 ######################################
 #Couldn't process without correct date
-
+#####################################
 
 ## 4. Topic validation: predictive validity using time series data
 #     a) Convert metadata to correct format
@@ -522,4 +584,7 @@ kResult <- searchK(documents = stmdfm$documents,
                    init.type = "Spectral",
                    data = stmdfm$meta,
                    prevalence = ~ section_name + s(month(date)))
-#cores = 6) # This no longer works on windows 10 :(
+```
+
+5.  What insights can be gleaned about right-wing media coverage of the 2016 US election?  What election-related topics were derived from the model?  What interesting temporal patterns exist?  Why might the prevalence of certain important topics vary over 2016?  Provide evidence in support of your answers.
+
